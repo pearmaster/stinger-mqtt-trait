@@ -236,7 +236,7 @@ mod tests {
         
         if let Ok(broker) = broker {
             // Default now uses Unix socket
-            assert!(broker.mqtt_uri().starts_with("mqtt+unix:///tmp/mqtt_test_"));
+            assert!(broker.mqtt_uri().starts_with("unix:///tmp/mqtt_test_"));
             assert!(broker.mqtt_uri().ends_with(".sock"));
             assert!(broker.stop().is_ok());
         }

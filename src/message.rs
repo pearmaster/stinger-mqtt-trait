@@ -60,31 +60,26 @@ impl MqttMessage {
             user_properties: HashMap::new(),
         }
     }
-}
 
-// Add helper methods to the generated builder
-#[allow(dead_code)]
-impl<T, Q, R, S, Co, Re, U> MqttMessageBuilder<T, Q, R, (), (), S, Co, Re, U> {
-    /// Set the payload from a string, converting it to Bytes
-    pub fn payload_string(self, payload: String) -> MqttMessageBuilder<T, Q, R, Bytes, (), S, Co, Re, U> {
-        self.payload(Bytes::from(payload))
-    }
-
-    /// Set the payload from a string slice, converting it to Bytes
-    pub fn payload_str(self, payload: &str) -> MqttMessageBuilder<T, Q, R, Bytes, (), S, Co, Re, U> {
-        self.payload(Bytes::from(payload.to_string()))
-    }
-
-    /// Set the payload from a serializable object, converting it to JSON bytes
-    /// and automatically setting content_type to "application/json"
-    /// 
-    /// # Errors
-    /// Returns a `serde_json::Error` if serialization fails
-    pub fn payload_object<O: Serialize>(self, object: &O) -> Result<MqttMessageBuilder<T, Q, R, Bytes, Option<String>, S, Co, Re, U>, serde_json::Error> {
-        let json_bytes = serde_json::to_vec(object)?;
-        Ok(self
-            .payload(Bytes::from(json_bytes))
-            .content_type(Some("application/json".to_string())))
+    /// Create a message with JSON payload from a serializable object
+    pub fn with_json_payload<T: Serialize>(
+        topic: String,
+        qos: QoS,
+        retain: bool,
+        payload: &T,
+    ) -> Result<Self, serde_json::Error> {
+        let json_bytes = serde_json::to_vec(payload)?;
+        Ok(Self {
+            topic,
+            qos,
+            retain,
+            payload: Bytes::from(json_bytes),
+            content_type: Some("application/json".to_string()),
+            subscription_id: None,
+            correlation_data: None,
+            response_topic: None,
+            user_properties: HashMap::new(),
+        })
     }
 }
 
@@ -181,42 +176,32 @@ mod tests {
     }
 
     #[test]
-    fn test_mqtt_message_builder_payload_string() {
-        let msg = MqttMessage::new()
-            .topic("test/string".to_string())
-            .qos(QoS::AtLeastOnce)
-            .retain(false)
-            .payload_string("Hello, MQTT!".to_string())
-            .content_type(None)
-            .subscription_id(None)
-            .correlation_data(None)
-            .response_topic(None)
-            .user_properties(HashMap::new())
-            .build();
+    fn test_mqtt_message_simple_string() {
+        let msg = MqttMessage::simple(
+            "test/string".to_string(),
+            QoS::AtLeastOnce,
+            false,
+            Bytes::from("Hello, MQTT!"),
+        );
 
         assert_eq!(msg.payload, Bytes::from("Hello, MQTT!"));
         assert_eq!(String::from_utf8(msg.payload.to_vec()).unwrap(), "Hello, MQTT!");
     }
 
     #[test]
-    fn test_mqtt_message_builder_payload_str() {
-        let msg = MqttMessage::new()
-            .topic("test/str".to_string())
-            .qos(QoS::ExactlyOnce)
-            .retain(true)
-            .payload_str("Test message")
-            .content_type(None)
-            .subscription_id(None)
-            .correlation_data(None)
-            .response_topic(None)
-            .user_properties(HashMap::new())
-            .build();
+    fn test_mqtt_message_string_payload() {
+        let msg = MqttMessage::simple(
+            "test/str".to_string(),
+            QoS::ExactlyOnce,
+            true,
+            Bytes::from("Test message"),
+        );
 
         assert_eq!(msg.payload, Bytes::from("Test message"));
     }
 
     #[test]
-    fn test_mqtt_message_builder_payload_object() {
+    fn test_mqtt_message_with_json_payload() {
         use serde::Serialize;
 
         #[derive(Serialize)]
@@ -232,17 +217,12 @@ mod tests {
             location: "Living Room".to_string(),
         };
 
-        let msg = MqttMessage::new()
-            .topic("sensor/data".to_string())
-            .qos(QoS::AtLeastOnce)
-            .retain(false)
-            .payload_object(&data)
-            .unwrap()
-            .subscription_id(None)
-            .correlation_data(None)
-            .response_topic(None)
-            .user_properties(HashMap::new())
-            .build();
+        let msg = MqttMessage::with_json_payload(
+            "sensor/data".to_string(),
+            QoS::AtLeastOnce,
+            false,
+            &data,
+        ).unwrap();
 
         // Verify it's valid JSON containing our data
         let json_str = String::from_utf8(msg.payload.to_vec()).unwrap();

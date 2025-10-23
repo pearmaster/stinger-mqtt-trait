@@ -148,6 +148,7 @@ pub trait MqttClient {
     /// reconnect. The `clean_start` parameter controls whether the new connection should start
     /// with a clean session (`true`) or resume the previous session (`false`).
     async fn reconnect(&mut self, clean_start: bool) -> Result<(), MqttError>;
+
 }
 
 // Re-export commonly used types
