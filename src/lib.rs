@@ -1,5 +1,8 @@
 pub mod message;
 
+#[cfg(feature = "validation")]
+pub mod validation;
+
 use async_trait::async_trait;
 use message::MqttMessage;
 use std::fmt;

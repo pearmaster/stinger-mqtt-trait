@@ -6,13 +6,14 @@ A Rust trait-based abstraction for MQTT clients, providing a clean interface for
 
 - **Trait-based design** - Implement `MqttClient` trait with any MQTT library
 - **MQTT 5.0 support** - Full support for MQTT 5.0 properties (content type, correlation data, user properties, etc.)
-- **Flexible payload types** - String, binary (Bytes), or serializable objects (JSON)
+- **Flexible payload types** - Binary (Bytes) or serializable objects (JSON)
 - **Last Will and Testament (LWT)** - Built-in support for presence detection and status updates
 - **Multiple publish modes**:
-  - `publish()` - Awaits completion
-  - `future_publish()` - Returns a future for async acknowledgment
+  - `publish()` - Awaits completion based on QoS level
   - `nowait_publish()` - Fire-and-forget
+- **Connection state monitoring** - Watch channel for connection state changes
 - **Async/await support** - Built with `tokio` and `async-trait`
+- **Validation suite** - Optional comprehensive test suite for implementations (feature: `validation`)
 
 ## Usage
 
@@ -21,6 +22,13 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 stinger-mqtt-trait = "0.1"
+```
+
+To use the validation suite for testing your implementation:
+
+```toml
+[dev-dependencies]
+stinger-mqtt-trait = { version = "0.1", features = ["validation"] }
 ```
 
 ### Creating Messages
@@ -92,6 +100,30 @@ let lwt = LastWill::new(
 - `QoS::AtMostOnce` (0) - Fire and forget
 - `QoS::AtLeastOnce` (1) - Acknowledged delivery
 - `QoS::ExactlyOnce` (2) - Assured delivery
+
+## Validation Suite
+
+The `validation` feature provides a comprehensive test suite for validating `MqttClient` implementations:
+
+```rust
+use stinger_mqtt_trait::validation::{broker::TestBroker, run_full_validation_suite};
+
+#[tokio::test]
+async fn test_my_implementation() {
+    // Start a test broker (requires rumqttd: cargo install rumqttd)
+    let broker = TestBroker::start_default().await.unwrap();
+    
+    // Test your client implementation
+    let mut client = MyMqttClient::new();
+    run_full_validation_suite(&mut client, &broker.mqtt_uri())
+        .await
+        .unwrap();
+    
+    broker.stop().unwrap();
+}
+```
+
+See `src/validation/README.md` for more details on the validation suite.
 
 ## License
 
