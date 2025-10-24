@@ -43,6 +43,7 @@ impl fmt::Display for MqttError {
             MqttError::DisconnectionError(msg) => write!(f, "Disconnection error: {}", msg),
             MqttError::InvalidTopic(msg) => write!(f, "Invalid topic: {}", msg),
             MqttError::InvalidQoS(msg) => write!(f, "Invalid QoS: {}", msg),
+            MqttError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
             MqttError::Other(msg) => write!(f, "Error: {}", msg),
         }
     }
