@@ -1,19 +1,22 @@
 # stinger-mqtt-trait
 
-A Rust trait-based abstraction for MQTT clients, providing a clean interface for implementing MQTT functionality without being tied to a specific MQTT library.
+A Rust trait-based abstraction for MQTT clients, providing a clean interface for implementing MQTT functionality without being tied to a specific MQTT library.  It allows a 3rd party library to make use of an MQTT connection, but without requiring a specific MQTT client.
+
+It is part of the "Stinger" suite of inter-process communication tools, but has no requirements on the suite and can easily be used elsewhere.
 
 ## Features
 
-- **Trait-based design** - Implement `MqttClient` trait with any MQTT library
-- **MQTT 5.0 support** - Full support for MQTT 5.0 properties (content type, correlation data, user properties, etc.)
-- **Flexible payload types** - Binary (Bytes) or serializable objects (JSON)
-- **Last Will and Testament (LWT)** - Built-in support for presence detection and status updates
-- **Multiple publish modes**:
+- **Trait design** - Libraries can implement `MqttClient` trait with any MQTT client
+- **MQTT 5.0 support** - `MqttMessage` struct allows for providing MQTTv5 properties.
+- **Multiple publish modes**: Libraries can provide two mechanisms for publishing messages:
   - `publish()` - Awaits completion based on QoS level
   - `nowait_publish()` - Fire-and-forget
-- **Connection state monitoring** - Watch channel for connection state changes
-- **Async/await support** - Built with `tokio` and `async-trait`
-- **Validation suite** - Optional comprehensive test suite for implementations (feature: `validation`)
+- **Connection state monitoring** - Libraries can share the connection state through a watch channel.
+- **Validation suite** - Optional (currently limited) test suite for implementations (feature: `validation`)
+
+## Consuming-application design
+
+Application code instantiates whatever MQTT connection object that implements the `MqttClient` trait.  It can then provide that connection object to a library or other utility that requires an MQTT connection and accepts the `MqttClient` trait.
 
 ## Usage
 
