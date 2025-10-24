@@ -152,7 +152,7 @@ pub trait MqttClient {
 }
 
 // Re-export commonly used types
-pub use message::QoS;
+pub use message::{MqttMessageBuilder, QoS};
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use builder_pattern::Builder;
+use derive_builder::Builder;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -16,6 +16,7 @@ pub enum QoS {
 
 /// MQTT message structure with support for MQTT 5.0 properties
 #[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
 pub struct MqttMessage {
     /// Topic to publish to or received from
     pub topic: String,
@@ -30,19 +31,37 @@ pub struct MqttMessage {
     pub payload: Bytes,
     
     /// Content type (MQTT 5.0 property)
+    #[builder(default)]
     pub content_type: Option<String>,
     
     /// Subscription identifier (MQTT 5.0 property)
+    #[builder(default)]
     pub subscription_id: Option<i32>,
     
     /// Correlation data for request/response pattern (MQTT 5.0 property)
+    #[builder(default)]
     pub correlation_data: Option<Bytes>,
     
     /// Response topic for request/response pattern (MQTT 5.0 property)
+    #[builder(default)]
     pub response_topic: Option<String>,
     
     /// User properties - custom key-value pairs (MQTT 5.0 property)
+    #[builder(default)]
     pub user_properties: HashMap<String, String>,
+}
+
+impl MqttMessageBuilder {
+
+    pub fn object_payload<T: Serialize>(
+        &mut self,
+        obj: &T,
+    ) -> Result<&mut Self, serde_json::Error> {
+        let json_payload = serde_json::to_vec(obj)?;
+        self.payload(Bytes::from(json_payload));
+        self.content_type(Some("application/json".to_string()));
+        Ok(self)
+    }
 }
 
 impl MqttMessage {
@@ -61,26 +80,6 @@ impl MqttMessage {
         }
     }
 
-    /// Create a message with JSON payload from a serializable object
-    pub fn with_json_payload<T: Serialize>(
-        topic: String,
-        qos: QoS,
-        retain: bool,
-        payload: &T,
-    ) -> Result<Self, serde_json::Error> {
-        let json_bytes = serde_json::to_vec(payload)?;
-        Ok(Self {
-            topic,
-            qos,
-            retain,
-            payload: Bytes::from(json_bytes),
-            content_type: Some("application/json".to_string()),
-            subscription_id: None,
-            correlation_data: None,
-            response_topic: None,
-            user_properties: HashMap::new(),
-        })
-    }
 }
 
 #[cfg(test)]
@@ -119,8 +118,8 @@ mod tests {
         let mut user_props = HashMap::new();
         user_props.insert("key1".to_string(), "value1".to_string());
 
-        let msg = MqttMessage::new()
-            .topic("builder/topic".to_string())
+        let msg = MqttMessageBuilder::default()
+            .topic("builder/topic")
             .qos(QoS::ExactlyOnce)
             .retain(true)
             .payload(payload)
@@ -129,7 +128,8 @@ mod tests {
             .response_topic(Some("response/topic".to_string()))
             .correlation_data(Some(Bytes::from(vec![1, 2, 3])))
             .user_properties(user_props)
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(msg.topic, "builder/topic");
         assert_eq!(msg.qos as i32, 2);
@@ -145,8 +145,8 @@ mod tests {
     #[test]
     fn test_mqtt_message_with_mqtt5_properties() {
         let payload = Bytes::from(vec![0xFF, 0xAA]);
-        let msg = MqttMessage::new()
-            .topic("mqtt5/test".to_string())
+        let msg = MqttMessageBuilder::default()
+            .topic("mqtt5/test")
             .qos(QoS::AtLeastOnce)
             .retain(false)
             .payload(payload)
@@ -155,7 +155,8 @@ mod tests {
             .correlation_data(None)
             .response_topic(None)
             .user_properties(HashMap::new())
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(msg.content_type, Some("application/octet-stream".to_string()));
         assert_eq!(msg.subscription_id, Some(999));

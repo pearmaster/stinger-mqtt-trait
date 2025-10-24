@@ -22,10 +22,10 @@
 - `receive_channel()` - returns `broadcast::Receiver<MqttMessage>` for incoming messages
 
 **MqttMessage Struct** - MQTT 5.0 compliant message with:
-- Public fields: `topic`, `qos`, `retain`, `content_type`, `subscription_id`, `correlation_data`, `response_topic`, `user_properties`
-- Private `payload` field - access via `payload_as_string()`, `payload_as_bytes()`, or `payload()` methods
-- Uses `builder-pattern` crate - construct via builder: `MqttMessage::new().topic(...).qos(...).build()`
+- Public fields: `topic`, `qos`, `retain`, `payload`, `content_type`, `subscription_id`, `correlation_data`, `response_topic`, `user_properties`
+- Uses `derive_builder` crate - construct via builder: `MqttMessageBuilder::default().topic(...).qos(...).build()?`
 - Helper method `simple()` for basic messages without MQTT 5.0 properties
+- Helper method `with_json_payload()` for creating messages with JSON serialized payloads
 
 **Payload Enum** - Three variants for message content:
 - `String(String)` - text payload
@@ -46,7 +46,9 @@
 - The broadcast channel should be created with appropriate capacity for message buffering
 
 ### Message Construction
-- Use builder pattern: `MqttMessage::new().topic("foo").qos(QoS::AtLeastOnce).retain(false).payload(payload).build()`
+- Use builder pattern: `MqttMessageBuilder::default().topic("foo").qos(QoS::AtLeastOnce).retain(false).payload(payload).build()?`
+- The builder returns `Result<MqttMessage, MqttMessageBuilderError>`, handle with `?` or `.unwrap()`
+- Builder uses `#[builder(setter(into))]` so String fields accept `&str` automatically
 - For simple cases: `MqttMessage::simple(topic, qos, retain, payload)`
 - Always use fully qualified paths for QoS in the trait: `message::QoS` (not just `QoS`)
 
@@ -56,7 +58,7 @@
 - Extract payload with `.payload_as_string()` or `.payload_as_bytes()` - handle potential UTF-8 errors
 
 ## Dependencies
-Core: `tokio` (sync features), `serde`, `serde_json`, `bytes`, `builder-pattern`, `async-trait`
+Core: `tokio` (sync features), `serde`, `serde_json`, `bytes`, `derive_builder`, `async-trait`
 
 ## Questions to Ask
 When making changes to this library, pause and ask about:

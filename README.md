@@ -45,15 +45,17 @@ let msg = MqttMessage::simple(
 );
 
 // With MQTT 5.0 properties using builder pattern
-let msg = MqttMessage::new()
-    .topic("sensor/data".to_string())
+use stinger_mqtt_trait::MqttMessageBuilder;
+
+let msg = MqttMessageBuilder::default()
+    .topic("sensor/data")
     .qos(QoS::ExactlyOnce)
     .retain(false)
     .payload(Payload::from_serializable(&my_struct)?)
     .content_type(Some("application/json".to_string()))
     .response_topic(Some("sensor/response".to_string()))
     .user_properties(properties_map)
-    .build();
+    .build()?;
 ```
 
 ### Implementing the Trait
