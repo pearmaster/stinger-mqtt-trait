@@ -25,9 +25,13 @@ pub enum MqttError {
     InvalidTopic(String),
     /// Invalid QoS
     InvalidQoS(String),
+    /// Timeout occurred
+    TimeoutError(String),
     /// Other errors
     Other(String),
 }
+
+
 
 impl fmt::Display for MqttError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -45,6 +49,19 @@ impl fmt::Display for MqttError {
 }
 
 impl std::error::Error for MqttError {}
+
+/// Represents the success result of an MQTT publish operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MqttPublishSuccess {
+    /// Message was sent (QoS 0)
+    Sent,
+    /// Message was acknowledged by broker (QoS 1, PUBACK received)
+    Acknowledged,
+    /// Message was fully completed (QoS 2, PUBCOMP received)
+    Completed,
+    /// Message was queued for sending (nowait_publish)
+    Queued,
+}
 
 /// Represents the connection state of an MQTT client
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,13 +139,13 @@ pub trait MqttClient {
     /// - QoS 0: Blocks until the message is sent
     /// - QoS 1: Blocks until a PUBACK is received from the broker
     /// - QoS 2: Blocks until a PUBCOMP is received from the broker
-    async fn publish(&mut self, message: MqttMessage) -> Result<(), MqttError>;
+    async fn publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError>;
 
     /// Publish a message without waiting for completion (fire and forget)
     /// 
     /// This function returns as soon as the message is queued to be sent, without waiting
     /// for any acknowledgment from the broker.
-    fn nowait_publish(&mut self, message: MqttMessage) -> Result<(), MqttError>;
+    fn nowait_publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError>;
 
     /// Start the MQTT client event loop
     /// 

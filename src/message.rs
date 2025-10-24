@@ -36,7 +36,7 @@ pub struct MqttMessage {
     
     /// Subscription identifier (MQTT 5.0 property)
     #[builder(default)]
-    pub subscription_id: Option<i32>,
+    pub subscription_id: Option<u32>,
     
     /// Correlation data for request/response pattern (MQTT 5.0 property)
     #[builder(default)]
