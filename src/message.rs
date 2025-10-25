@@ -218,12 +218,14 @@ mod tests {
             location: "Living Room".to_string(),
         };
 
-        let msg = MqttMessage::with_json_payload(
-            "sensor/data".to_string(),
-            QoS::AtLeastOnce,
-            false,
-            &data,
-        ).unwrap();
+        let msg = MqttMessageBuilder::default()
+            .topic("sensor/data")
+            .qos(QoS::AtLeastOnce)
+            .retain(false)
+            .object_payload(&data)
+            .unwrap()
+            .build()
+            .unwrap();
 
         // Verify it's valid JSON containing our data
         let json_str = String::from_utf8(msg.payload.to_vec()).unwrap();

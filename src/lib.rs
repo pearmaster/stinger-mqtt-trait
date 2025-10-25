@@ -3,8 +3,10 @@ pub mod message;
 #[cfg(feature = "validation")]
 pub mod validation;
 
+pub mod mock;
+
 use async_trait::async_trait;
-use message::MqttMessage;
+pub use message::MqttMessage;
 use std::fmt;
 use tokio::sync::{broadcast, watch};
 
@@ -266,12 +268,12 @@ mod tests {
             Ok(())
         }
 
-        async fn publish(&mut self, _message: MqttMessage) -> Result<(), MqttError> {
-            Ok(())
+        async fn publish(&mut self, _message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+            Ok(MqttPublishSuccess::Sent)
         }
 
-        fn nowait_publish(&mut self, _message: MqttMessage) -> Result<(), MqttError> {
-            Ok(())
+        fn nowait_publish(&mut self, _message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+            Ok(MqttPublishSuccess::Queued)
         }
 
         async fn start(&mut self) -> Result<(), MqttError> {
