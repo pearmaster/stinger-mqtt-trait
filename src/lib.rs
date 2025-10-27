@@ -126,7 +126,7 @@ pub trait MqttClient {
     /// Messages received on this subscription will be sent to the provided channel.
     /// Returns a subscription identifier that will be set in the `subscription_id` field
     /// of all `MqttMessage`s received on this subscription.
-    async fn subscribe(&mut self, topic: String, qos: message::QoS, tx: broadcast::Sender<MqttMessage>) -> Result<i32, MqttError>;
+    async fn subscribe(&mut self, topic: String, qos: message::QoS, tx: broadcast::Sender<MqttMessage>) -> Result<u32, MqttError>;
 
     /// Unsubscribe from a topic
     /// 
@@ -265,7 +265,7 @@ mod tests {
             self.state_rx.clone()
         }
 
-        async fn subscribe(&mut self, _topic: String, _qos: message::QoS, _tx: broadcast::Sender<MqttMessage>) -> Result<i32, MqttError> {
+        async fn subscribe(&mut self, _topic: String, _qos: message::QoS, _tx: broadcast::Sender<MqttMessage>) -> Result<u32, MqttError> {
             Ok(1)
         }
 
