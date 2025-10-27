@@ -3,6 +3,7 @@ pub mod message;
 #[cfg(feature = "validation")]
 pub mod validation;
 
+#[cfg(feature = "mock_client")]
 pub mod mock;
 
 use async_trait::async_trait;

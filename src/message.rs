@@ -62,6 +62,15 @@ impl MqttMessageBuilder {
         self.content_type(Some("application/json".to_string()));
         Ok(self)
     }
+
+    /// Add a single user property key-value pair to the message
+    pub fn user_property(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
+        let mut props = self.user_properties.take().unwrap_or_default();
+        props.insert(key.into(), value.into());
+        self.user_properties(props);
+        self
+    }
+    
 }
 
 impl MqttMessage {
