@@ -89,6 +89,7 @@ impl MqttMessage {
             subscription_id: None,
             correlation_data: None,
             response_topic: None,
+            message_expiry_interval: None,
             user_properties: HashMap::new(),
         }
     }
