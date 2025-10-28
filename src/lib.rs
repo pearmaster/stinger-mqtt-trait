@@ -63,7 +63,7 @@ pub enum MqttPublishSuccess {
     Acknowledged,
     /// Message was fully completed (QoS 2, PUBCOMP received)
     Completed,
-    /// Message was queued for sending (nowait_publish)
+    /// Message was queued for sending (publish_nowait)
     Queued,
 }
 

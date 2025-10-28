@@ -178,8 +178,8 @@ pub async fn test_publish_all_qos_levels<C: MqttClient>(client: &mut C) -> Resul
     Ok(())
 }
 
-/// Test nowait_publish (fire and forget, no blocking)
-pub async fn test_nowait_publish<C: MqttClient>(client: &mut C) -> Result<(), String> {
+/// Test publish_nowait (fire and forget, no blocking)
+pub async fn test_publish_nowait<C: MqttClient>(client: &mut C) -> Result<(), String> {
     let message = MqttMessage::simple(
         "test/nowait".to_string(),
         message::QoS::AtMostOnce,
@@ -188,8 +188,8 @@ pub async fn test_nowait_publish<C: MqttClient>(client: &mut C) -> Result<(), St
     );
 
     client
-        .nowait_publish(message)
-        .map_err(|e| format!("Failed to nowait publish: {}", e))?;
+        .publish_nowait(message)
+        .map_err(|e| format!("Failed to publish_nowait: {}", e))?;
 
     Ok(())
 }
@@ -386,7 +386,7 @@ pub async fn run_full_validation_suite<C: MqttClient>(
     println!("    ✓ QoS 2 publish");
 
     println!("  Testing nowait publish...");
-    test_nowait_publish(client).await?;
+    test_publish_nowait(client).await?;
     println!("    ✓ No-wait publish");
 
     println!("  Testing subscribe...");

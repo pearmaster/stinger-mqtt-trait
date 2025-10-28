@@ -10,7 +10,7 @@ It is part of the "Stinger" suite of inter-process communication tools, but has 
 - **MQTT 5.0 support** - `MqttMessage` struct allows for providing MQTTv5 properties.
 - **Multiple publish modes**: Libraries can provide two mechanisms for publishing messages:
   - `publish()` - Awaits completion based on QoS level
-  - `nowait_publish()` - Fire-and-forget
+    - `publish_nowait()` - Fire-and-forget
 - **Connection state monitoring** - Libraries can share the connection state through a watch channel.
 - **Validation suite** - Optional (currently limited) test suite for implementations (feature: `validation`)
 

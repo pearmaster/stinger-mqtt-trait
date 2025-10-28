@@ -8,7 +8,7 @@ The `MockClient` provides a fully functional in-memory implementation of the `Mq
 
 ## Features
 
-- **Message Capture**: All published messages (via `publish()` or `nowait_publish()`) are stored and can be retrieved
+- **Message Capture**: All published messages (via `publish()` or `publish_nowait()` or `publish_noblock()`) are stored and can be retrieved
 - **Subscription Simulation**: Register broadcast channels for subscriptions and simulate incoming messages
 - **State Management**: Properly tracks and updates connection state
 - **No Broker Required**: Completely in-memory, perfect for unit testing

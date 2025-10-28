@@ -9,7 +9,7 @@ mod test_validation {
         test_publish_qos1,
         test_publish_qos2,
         test_subscribe_receive_unsubscribe,
-        test_nowait_publish,
+    test_publish_nowait,
         run_full_validation_suite,
     };
     use crate::mock::client::MockClient;
@@ -58,9 +58,9 @@ mod test_validation {
     }
 
     #[tokio::test]
-    async fn test_mock_client_nowait_publish() {
+    async fn test_mock_client_publish_nowait() {
         let mut client = MockClient::new();
-        test_nowait_publish(&mut client)
+    test_publish_nowait(&mut client)
             .await
             .expect("Nowait publish validation failed");
     }

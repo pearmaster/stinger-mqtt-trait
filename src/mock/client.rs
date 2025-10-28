@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mock_client_nowait_publish() {
+    async fn test_mock_client_publish_nowait() {
         let mut client = MockClient::new("test");
         
         let msg = MqttMessage::simple(
@@ -273,7 +273,7 @@ mod tests {
             Bytes::from("test"),
         );
         
-        let result = client.nowait_publish(msg);
+    let result = client.publish_nowait(msg);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), MqttPublishSuccess::Queued);
         

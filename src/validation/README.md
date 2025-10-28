@@ -93,7 +93,7 @@ cargo install rumqttd
 - `test_publish_qos1()` - Publish with QoS 1 (wait for PUBACK)
 - `test_publish_qos2()` - Publish with QoS 2 (wait for PUBCOMP)
 - `test_publish_all_qos_levels()` - Test all QoS levels
-- `test_nowait_publish()` - Fire-and-forget publish
+- `test_publish_nowait()` - Fire-and-forget publish
 
 ### Subscription Tests
 - `test_subscribe()` - Subscribe and verify subscription ID

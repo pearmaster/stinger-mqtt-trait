@@ -17,8 +17,8 @@
 - Subscription: `subscribe()` returns subscription ID, `unsubscribe()`
 - Three publish variants:
   - `publish()` - awaits completion
-  - `future_publish()` - returns `oneshot::Receiver<Result<(), MqttError>>` for async acknowledgment
-  - `nowait_publish()` - fire-and-forget (not async)
+  - `publish_noblock()` - returns `oneshot::Receiver<Result<(), MqttError>>` for async acknowledgment
+  - `publish_nowait()` - fire-and-forget (not async)
 - `receive_channel()` - returns `broadcast::Receiver<MqttMessage>` for incoming messages
 
 **MqttMessage Struct** - MQTT 5.0 compliant message with:
@@ -40,7 +40,7 @@
 ## Development Conventions
 
 ### When Implementing MqttClient
-- All trait methods must be async except `nowait_publish()` and `receive_channel()`
+- All trait methods must be async except `publish_nowait()` and `receive_channel()`
 - Use `#[async_trait]` on impl blocks
 - Return `MqttError` variants matching the operation type
 - The broadcast channel should be created with appropriate capacity for message buffering
