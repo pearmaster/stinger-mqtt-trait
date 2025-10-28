@@ -45,6 +45,10 @@ pub struct MqttMessage {
     /// Response topic for request/response pattern (MQTT 5.0 property)
     #[builder(default)]
     pub response_topic: Option<String>,
+
+    /// Message expiry interval in seconds (MQTT 5.0 property)
+    #[builder(default)]
+    pub message_expiry_interval: Option<u32>,
     
     /// User properties - custom key-value pairs (MQTT 5.0 property)
     #[builder(default)]
