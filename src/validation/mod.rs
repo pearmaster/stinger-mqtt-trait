@@ -195,7 +195,7 @@ pub async fn test_publish_nowait<C: MqttClient>(client: &mut C) -> Result<(), St
 }
 
 /// Test subscribe and verify subscription ID is returned
-pub async fn test_subscribe<C: MqttClient>(client: &mut C) -> Result<i32, String> {
+pub async fn test_subscribe<C: MqttClient>(client: &mut C) -> Result<u32, String> {
     let (tx, _rx) = tokio::sync::broadcast::channel(10);
 
     let sub_id = client

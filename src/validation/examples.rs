@@ -339,7 +339,7 @@ impl MqttClient for MockMqttClient {
         _topic: String,
         _qos: message::QoS,
         _tx: tokio::sync::broadcast::Sender<MqttMessage>,
-    ) -> Result<i32, MqttError> {
+    ) -> Result<u32, MqttError> {
         Ok(1)
     }
 

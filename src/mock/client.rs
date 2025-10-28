@@ -110,9 +110,9 @@ impl MqttClient for MockClient {
         topic: String,
         _qos: QoS,
         tx: broadcast::Sender<MqttMessage>,
-    ) -> Result<i32, MqttError> {
+    ) -> Result<u32, MqttError> {
         let mut subscriptions = self.subscriptions.lock().unwrap();
-        let subscription_id = (subscriptions.len() + 1) as i32;
+        let subscription_id = (subscriptions.len() + 1) as u32;
         subscriptions.push((topic, tx));
         Ok(subscription_id)
     }

@@ -265,7 +265,7 @@ mod tests {
             self.state_rx.clone()
         }
 
-        async fn subscribe(&mut self, _topic: String, _qos: message::QoS, _tx: broadcast::Sender<MqttMessage>) -> Result<i32, MqttError> {
+        async fn subscribe(&mut self, _topic: String, _qos: message::QoS, _tx: broadcast::Sender<MqttMessage>) -> Result<u32, MqttError> {
             Ok(1)
         }
 
