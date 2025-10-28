@@ -140,7 +140,20 @@ impl MqttClient for MockClient {
         }
     }
 
-    fn nowait_publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+    async fn publish_noblock(&mut self, message: MqttMessage) -> tokio::sync::oneshot::Receiver<Result<MqttPublishSuccess, MqttError>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.published_messages.lock().unwrap().push(message.clone());
+        // Simulate immediate success for mock
+        let result = match message.qos {
+            QoS::AtMostOnce => Ok(MqttPublishSuccess::Sent),
+            QoS::AtLeastOnce => Ok(MqttPublishSuccess::Acknowledged),
+            QoS::ExactlyOnce => Ok(MqttPublishSuccess::Completed),
+        };
+        let _ = tx.send(result);
+        rx
+    }
+
+    fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
         self.published_messages.lock().unwrap().push(message);
         Ok(MqttPublishSuccess::Queued)
     }

@@ -9,7 +9,7 @@ pub mod mock;
 use async_trait::async_trait;
 pub use message::MqttMessage;
 use std::fmt;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, watch, oneshot};
 
 /// Custom error type for MQTT operations
 #[derive(Debug, Clone)]
@@ -145,11 +145,19 @@ pub trait MqttClient {
     /// - QoS 2: Blocks until a PUBCOMP is received from the broker
     async fn publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError>;
 
+    /// Publish a message to the broker and returns a oneshot channel that receives when done.
+    /// 
+    /// The oneshot channel will receive when the publish is complete according to the QoS level set in the message:
+    /// - QoS 0: Blocks until the message is sent
+    /// - QoS 1: Blocks until a PUBACK is received from the broker
+    /// - QoS 2: Blocks until a PUBCOMP is received from the broker
+    async fn publish_noblock(&mut self, message: MqttMessage) -> oneshot::Receiver<Result<MqttPublishSuccess, MqttError>>;
+
     /// Publish a message without waiting for completion (fire and forget)
     /// 
     /// This function returns as soon as the message is queued to be sent, without waiting
     /// for any acknowledgment from the broker.
-    fn nowait_publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError>;
+    fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError>;
 
     /// Start the MQTT client event loop
     /// 
@@ -273,7 +281,14 @@ mod tests {
             Ok(MqttPublishSuccess::Sent)
         }
 
-        fn nowait_publish(&mut self, _message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+
+        async fn publish_noblock(&mut self, _message: MqttMessage) -> oneshot::Receiver<Result<MqttPublishSuccess, MqttError>> {
+            let (tx, rx) = oneshot::channel();
+            let _ = tx.send(Ok(MqttPublishSuccess::Sent));
+            rx
+        }
+
+        fn publish_nowait(&mut self, _message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
             Ok(MqttPublishSuccess::Queued)
         }
 
@@ -352,7 +367,7 @@ mod tests {
             false,
             bytes::Bytes::from("test"),
         );
-        let result = client.nowait_publish(msg);
+        let result = client.publish_nowait(msg);
         assert!(result.is_ok());
     }
 }
