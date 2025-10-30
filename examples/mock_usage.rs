@@ -9,17 +9,14 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use stinger_mqtt_trait::{MqttClient, mock::MockClient, MqttMessage, QoS};
+    use stinger_mqtt_trait::{Mqtt5PubSub, mock::MockClient, MqttMessage, QoS};
     use bytes::Bytes;
     use tokio::sync::broadcast;
 
     #[tokio::test]
     async fn example_basic_publish_and_retrieve() {
-        // Create a mock client
+        // Create a mock client (already "connected" - stateless)
         let mut client = MockClient::new("test-client");
-        
-        // Connect (doesn't actually connect to a broker)
-        client.connect("mqtt://localhost:1883".to_string()).await.unwrap();
         
         // Publish a message
         let message = MqttMessage::simple(
@@ -149,5 +146,58 @@ mod tests {
         assert_eq!(deserialized.humidity, 65);
         
         println!("✓ Published and retrieved JSON message: {:?}", deserialized);
+    }
+
+    #[tokio::test]
+    async fn example_availability_helper() {
+        use stinger_mqtt_trait::Mqtt5PubSub;
+        
+        let mut client = MockClient::new("sensor-client");
+        
+        // Get availability helper for this client
+        let mut helper = client.get_availability_helper();
+        
+        // The helper uses the client ID as the system ID by default
+        assert_eq!(helper.get_topic(), "system/sensor-client");
+        
+        // Customize the availability data
+        {
+            let mut data = helper.data.lock().unwrap();
+            data.name = Some("Temperature Sensor".to_string());
+            data.system_version = Some("1.0.0".to_string());
+            data.description = Some("Main temperature monitoring sensor".to_string());
+        }
+        
+        // Create an "online" availability message
+        let online_msg = helper.get_message(true).unwrap();
+        assert_eq!(online_msg.topic, "system/sensor-client");
+        assert_eq!(online_msg.retain, true);
+        
+        // Publish it
+        client.publish(online_msg).await.unwrap();
+        
+        // Verify it was published
+        let last_msg = client.last_published_message().unwrap();
+        assert_eq!(last_msg.topic, "system/sensor-client");
+        
+        // Deserialize to check the data
+        use stinger_mqtt_trait::available::OnlineData;
+        let data: OnlineData = serde_json::from_slice(&last_msg.payload).unwrap();
+        assert_eq!(data.online, true);
+        assert_eq!(data.system_id, Some("sensor-client".to_string()));
+        assert_eq!(data.name, Some("Temperature Sensor".to_string()));
+        
+        println!("✓ Published availability message: online={}, name={:?}", 
+                 data.online, data.name);
+        
+        // Now publish an "offline" message
+        let offline_msg = helper.get_message(false).unwrap();
+        client.publish(offline_msg).await.unwrap();
+        
+        let last_msg = client.last_published_message().unwrap();
+        let data: OnlineData = serde_json::from_slice(&last_msg.payload).unwrap();
+        assert_eq!(data.online, false);
+        
+        println!("✓ Published offline availability message");
     }
 }

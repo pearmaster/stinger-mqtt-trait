@@ -145,6 +145,10 @@ impl Mqtt5PubSub for MockClient {
         self.published_messages.lock().unwrap().push(message);
         Ok(MqttPublishSuccess::Queued)
     }
+
+    fn get_availability_helper(&mut self) -> crate::available::AvailabilityHelper {
+        crate::available::AvailabilityHelper::client_availability("local".to_string(), self.client_id.clone())
+    }
 }
 
 #[cfg(test)]

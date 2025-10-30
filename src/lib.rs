@@ -1,4 +1,5 @@
 pub mod message;
+pub mod available;
 
 #[cfg(feature = "validation")]
 pub mod validation;
@@ -127,6 +128,9 @@ pub trait Mqtt5PubSub {
     /// This function returns as soon as the message is queued to be sent, without waiting
     /// for any acknowledgment from the broker.
     fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError>;
+
+    /// Get an AvailabilityHelper for publishing availability messages.  
+    fn get_availability_helper(&mut self) -> available::AvailabilityHelper;
 }
 
 // Re-export commonly used types
@@ -218,6 +222,10 @@ mod tests {
 
         fn publish_nowait(&mut self, _message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError> {
             Ok(MqttPublishSuccess::Queued)
+        }
+
+        fn get_availability_helper(&mut self) -> available::AvailabilityHelper {
+            available::AvailabilityHelper::system_availability(self.client_id.clone())
         }
     }
 
