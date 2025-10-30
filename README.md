@@ -1,22 +1,27 @@
 # stinger-mqtt-trait
 
-A Rust trait-based abstraction for MQTT clients, providing a clean interface for implementing MQTT functionality without being tied to a specific MQTT library.  It allows a 3rd party library to make use of an MQTT connection, but without requiring a specific MQTT client.
+A Rust trait-based abstraction for MQTT pub/sub operations, providing a clean interface for publishing and subscribing to MQTT topics without being tied to a specific MQTT library. It allows libraries to perform MQTT pub/sub operations using a client connection managed by the application.
 
 It is part of the "Stinger" suite of inter-process communication tools, but has no requirements on the suite and can easily be used elsewhere.
 
 ## Features
 
-- **Trait design** - Libraries can implement `MqttClient` trait with any MQTT client
-- **MQTT 5.0 support** - `MqttMessage` struct allows for providing MQTTv5 properties.
-- **Multiple publish modes**: Libraries can provide two mechanisms for publishing messages:
+- **Trait design** - Libraries can implement `Mqtt5PubSub` trait with any MQTT client
+- **MQTT 5.0 support** - `MqttMessage` struct allows for providing MQTTv5 properties
+- **Multiple publish mechanisms**: Three mechanisms for publishing messages:
   - `publish()` - Awaits completion based on QoS level
-    - `publish_nowait()` - Fire-and-forget
-- **Connection state monitoring** - Libraries can share the connection state through a watch channel.
-- **Validation suite** - Optional (currently limited) test suite for implementations (feature: `validation`)
+  - `publish_noblock()` - Returns oneshot channel for async acknowledgment
+  - `publish_nowait()` - Fire-and-forget
+- **Connection state monitoring** - Libraries can monitor connection state through a watch channel
+- **Mock client** - Stateless mock implementation for testing (feature: `mock_client`)
+- **Validation suite** - Optional test suite for implementations (feature: `validation`)
 
-## Consuming-application design
+## Design Philosophy
 
-Application code instantiates whatever MQTT connection object that implements the `MqttClient` trait.  It can then provide that connection object to a library or other utility that requires an MQTT connection and accepts the `MqttClient` trait.
+**Application manages connections, libraries use pub/sub:**
+- Application code is responsible for managing the MQTT client connection lifecycle (connecting, disconnecting, reconnecting, etc.)
+- Libraries implement `Mqtt5PubSub` to provide pub/sub operations on an already-connected client
+- This separation of concerns allows libraries to focus on their domain logic while the application handles connection management
 
 ## Usage
 
@@ -64,40 +69,50 @@ let msg = MqttMessageBuilder::default()
 ### Implementing the Trait
 
 ```rust
-use stinger_mqtt_trait::{MqttClient, MqttMessage, MqttError, LastWill, QoS};
+use stinger_mqtt_trait::{Mqtt5PubSub, MqttMessage, Mqtt5PubSubError, MqttConnectionState, QoS};
 use async_trait::async_trait;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, watch};
 
-struct MyMqttClient {
-    // Your implementation fields
+struct MyMqtt5PubSubClient {
+    // Your implementation fields (wrapping an actual MQTT client)
 }
 
 #[async_trait]
-impl MqttClient for MyMqttClient {
-    async fn connect(&mut self, uri: String, last_will: LastWill) -> Result<(), MqttError> {
-        // Your connection logic
+impl Mqtt5PubSub for MyMqtt5PubSubClient {
+    fn get_client_id(&self) -> String {
+        // Return the MQTT client ID
     }
 
-    async fn publish(&mut self, message: MqttMessage) -> Result<(), MqttError> {
-        // Your publish logic
+    fn get_state(&self) -> watch::Receiver<MqttConnectionState> {
+        // Return watch receiver for connection state monitoring
     }
 
-    // Implement other trait methods...
+    async fn subscribe(
+        &mut self,
+        topic: String,
+        qos: QoS,
+        tx: broadcast::Sender<MqttMessage>
+    ) -> Result<u32, Mqtt5PubSubError> {
+        // Your subscribe logic, return subscription ID
+    }
+
+    async fn unsubscribe(&mut self, topic: String) -> Result<(), Mqtt5PubSubError> {
+        // Your unsubscribe logic
+    }
+
+    async fn publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError> {
+        // Your publish logic (awaits completion)
+    }
+
+    async fn publish_noblock(&mut self, message: MqttMessage) 
+        -> oneshot::Receiver<Result<MqttPublishSuccess, Mqtt5PubSubError>> {
+        // Your non-blocking publish logic
+    }
+
+    fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError> {
+        // Your fire-and-forget publish logic
+    }
 }
-```
-
-### Last Will and Testament
-
-```rust
-use stinger_mqtt_trait::{LastWill, Payload};
-use std::time::Duration;
-
-let lwt = LastWill::new(
-    "device/status".to_string(),
-    Payload::String("online".to_string()),
-    Payload::String("offline".to_string()),
-    Duration::from_secs(30),
-);
 ```
 
 ## Quality of Service Levels
@@ -108,23 +123,21 @@ let lwt = LastWill::new(
 
 ## Validation Suite
 
-The `validation` feature provides a comprehensive test suite for validating `MqttClient` implementations:
+The `validation` feature provides a comprehensive test suite for validating `Mqtt5PubSub` implementations:
 
 ```rust
-use stinger_mqtt_trait::validation::{broker::TestBroker, run_full_validation_suite};
+use stinger_mqtt_trait::validation::run_full_pubsub_validation_suite;
 
 #[tokio::test]
 async fn test_my_implementation() {
-    // Start a test broker (requires rumqttd: cargo install rumqttd)
-    let broker = TestBroker::start_default().await.unwrap();
+    // Application connects the client first
+    let mut client = MyMqtt5PubSubClient::new();
+    // ... connect your client here ...
     
-    // Test your client implementation
-    let mut client = MyMqttClient::new();
-    run_full_validation_suite(&mut client, &broker.mqtt_uri())
+    // Test pub/sub operations
+    run_full_pubsub_validation_suite(&mut client)
         .await
         .unwrap();
-    
-    broker.stop().unwrap();
 }
 ```
 

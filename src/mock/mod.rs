@@ -1,25 +1,25 @@
-//! Mock MQTT client for testing
+//! Mock MQTT pub/sub client for testing
 //! 
-//! This module provides a [`MockClient`] implementation of the [`MqttClient`](crate::MqttClient) trait
-//! that can be used for testing without requiring an actual MQTT broker.
+//! This module provides a [`MockClient`] implementation of the [`Mqtt5PubSub`](crate::Mqtt5PubSub) trait
+//! that can be used for testing pub/sub operations without requiring an actual MQTT broker.
 //! 
 //! # Features
 //! 
+//! - Stateless - assumes connection is always available
 //! - Captures all published messages for later inspection
 //! - Simulates receiving messages on subscribed topics
-//! - Tracks connection state changes
 //! - Fully in-memory operation
 //! 
 //! # Example
 //! 
 //! ```
-//! use stinger_mqtt_trait::{MqttClient, mock::MockClient, MqttMessage, QoS};
+//! use stinger_mqtt_trait::{Mqtt5PubSub, mock::MockClient, MqttMessage, QoS};
 //! use bytes::Bytes;
 //! 
 //! # #[tokio::main]
 //! # async fn main() {
-//! let mut client = MockClient::new("test-client");
-//! client.connect("mqtt://localhost:1883".to_string()).await.unwrap();
+//! let mut client = MockClient::new("test-device");
+//! assert_eq!(client.get_client_id(), "test-device");
 //! 
 //! let message = MqttMessage::simple(
 //!     "sensor/temperature".to_string(),

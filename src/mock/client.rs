@@ -1,41 +1,43 @@
-//! Mock MQTT client for testing purposes
+//! Mock MQTT5 pub/sub client for testing purposes
 
-use crate::{MqttClient, MqttConnectionState, MqttError, MqttPublishSuccess, message::{MqttMessage, QoS}};
+use crate::{Mqtt5PubSub, MqttConnectionState, Mqtt5PubSubError, MqttPublishSuccess, message::{MqttMessage, QoS}};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, watch};
 
-/// A mock MQTT client for testing purposes
+/// A stateless mock MQTT pub/sub client for testing purposes
 /// 
 /// This implementation stores published messages and allows simulating received messages
-/// through registered subscriptions. It's designed for unit testing MQTT-based applications
-/// without requiring an actual MQTT broker.
+/// through registered subscriptions. It's designed for unit testing MQTT pub/sub operations
+/// without requiring an actual MQTT broker or managing connection lifecycle.
+/// 
+/// The mock client assumes the connection is always available and ready.
 #[derive(Clone)]
 pub struct MockClient {
     client_id: String,
-    last_will: Option<MqttMessage>,
-    state_tx: Arc<Mutex<watch::Sender<MqttConnectionState>>>,
     state_rx: watch::Receiver<MqttConnectionState>,
     /// Storage for published messages
     published_messages: Arc<Mutex<Vec<MqttMessage>>>,
-    /// Storage for subscription senders
-    subscriptions: Arc<Mutex<Vec<(String, broadcast::Sender<MqttMessage>)>>>,
+    /// Storage for subscription senders and their IDs
+    subscriptions: Arc<Mutex<Vec<(String, u32, broadcast::Sender<MqttMessage>)>>>,
+    /// Next subscription ID to assign
+    next_sub_id: Arc<Mutex<u32>>,
 }
 
 impl MockClient {
     /// Create a new MockClient with the given client ID
     pub fn new(client_id: impl Into<String>) -> Self {
-        let (state_tx, state_rx) = watch::channel(MqttConnectionState::Disconnected);
+        let (state_tx, state_rx) = watch::channel(MqttConnectionState::Connected);
+        drop(state_tx); // Stateless - always shows as connected
         Self {
             client_id: client_id.into(),
-            last_will: None,
-            state_tx: Arc::new(Mutex::new(state_tx)),
             state_rx,
             published_messages: Arc::new(Mutex::new(Vec::new())),
             subscriptions: Arc::new(Mutex::new(Vec::new())),
+            next_sub_id: Arc::new(Mutex::new(1)),
         }
     }
-
+    
     /// Create a new MockClient with a default client ID
     pub fn new_default() -> Self {
         Self::new("mock-client")
@@ -61,42 +63,32 @@ impl MockClient {
     /// This will send the message through any registered subscription senders
     /// that match the given topic. Returns the number of subscriptions that
     /// received the message.
-    pub fn simulate_receive(&self, message: MqttMessage) -> Result<usize, MqttError> {
+    pub fn simulate_receive(&self, mut message: MqttMessage) -> Result<usize, Mqtt5PubSubError> {
         let subscriptions = self.subscriptions.lock().unwrap();
         let mut sent_count = 0;
 
-        for (topic, tx) in subscriptions.iter() {
+        for (topic, sub_id, tx) in subscriptions.iter() {
             // Simple topic matching (exact match only, no wildcards)
             if topic == &message.topic {
+                message.subscription_id = Some(*sub_id);
                 tx.send(message.clone())
-                    .map_err(|e| MqttError::Other(format!("Failed to send message to subscription: {}", e)))?;
+                    .map_err(|e| Mqtt5PubSubError::Other(format!("Failed to send message to subscription: {}", e)))?;
                 sent_count += 1;
             }
         }
 
         Ok(sent_count)
     }
+}
 
-    /// Set the connection state (for testing state transitions)
-    pub fn set_connection_state(&self, state: MqttConnectionState) -> Result<(), MqttError> {
-        self.state_tx.lock().unwrap()
-            .send(state)
-            .map_err(|e| MqttError::Other(format!("Failed to send state update: {}", e)))
+impl Default for MockClient {
+    fn default() -> Self {
+        Self::new_default()
     }
 }
 
 #[async_trait]
-impl MqttClient for MockClient {
-    async fn connect(&mut self, _uri: String) -> Result<(), MqttError> {
-        self.set_connection_state(MqttConnectionState::Connecting)?;
-        self.set_connection_state(MqttConnectionState::Connected)?;
-        Ok(())
-    }
-
-    fn set_last_will(&mut self, message: MqttMessage) {
-        self.last_will = Some(message);
-    }
-
+impl Mqtt5PubSub for MockClient {
     fn get_client_id(&self) -> String {
         self.client_id.clone()
     }
@@ -110,26 +102,22 @@ impl MqttClient for MockClient {
         topic: String,
         _qos: QoS,
         tx: broadcast::Sender<MqttMessage>,
-    ) -> Result<u32, MqttError> {
+    ) -> Result<u32, Mqtt5PubSubError> {
         let mut subscriptions = self.subscriptions.lock().unwrap();
-        let subscription_id = (subscriptions.len() + 1) as u32;
-        subscriptions.push((topic, tx));
+        let mut next_id = self.next_sub_id.lock().unwrap();
+        let subscription_id = *next_id;
+        *next_id += 1;
+        subscriptions.push((topic, subscription_id, tx));
         Ok(subscription_id)
     }
 
-    async fn unsubscribe(&mut self, topic: String) -> Result<(), MqttError> {
+    async fn unsubscribe(&mut self, topic: String) -> Result<(), Mqtt5PubSubError> {
         let mut subscriptions = self.subscriptions.lock().unwrap();
-        subscriptions.retain(|(t, _)| t != &topic);
+        subscriptions.retain(|(t, _, _)| t != &topic);
         Ok(())
     }
 
-    async fn disconnect(&mut self) -> Result<(), MqttError> {
-        self.set_connection_state(MqttConnectionState::Disconnecting)?;
-        self.set_connection_state(MqttConnectionState::Disconnected)?;
-        Ok(())
-    }
-
-    async fn publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+    async fn publish(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError> {
         self.published_messages.lock().unwrap().push(message.clone());
         
         // Return appropriate success variant based on QoS
@@ -140,7 +128,7 @@ impl MqttClient for MockClient {
         }
     }
 
-    async fn publish_noblock(&mut self, message: MqttMessage) -> tokio::sync::oneshot::Receiver<Result<MqttPublishSuccess, MqttError>> {
+    async fn publish_noblock(&mut self, message: MqttMessage) -> tokio::sync::oneshot::Receiver<Result<MqttPublishSuccess, Mqtt5PubSubError>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.published_messages.lock().unwrap().push(message.clone());
         // Simulate immediate success for mock
@@ -153,31 +141,9 @@ impl MqttClient for MockClient {
         rx
     }
 
-    fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, MqttError> {
+    fn publish_nowait(&mut self, message: MqttMessage) -> Result<MqttPublishSuccess, Mqtt5PubSubError> {
         self.published_messages.lock().unwrap().push(message);
         Ok(MqttPublishSuccess::Queued)
-    }
-
-    async fn start(&mut self) -> Result<(), MqttError> {
-        Ok(())
-    }
-
-    async fn clean_stop(&mut self) -> Result<(), MqttError> {
-        self.set_connection_state(MqttConnectionState::Disconnected)?;
-        Ok(())
-    }
-
-    async fn force_stop(&mut self) -> Result<(), MqttError> {
-        self.set_connection_state(MqttConnectionState::Disconnected)?;
-        Ok(())
-    }
-
-    async fn reconnect(&mut self, _clean_start: bool) -> Result<(), MqttError> {
-        self.set_connection_state(MqttConnectionState::Disconnecting)?;
-        self.set_connection_state(MqttConnectionState::Disconnected)?;
-        self.set_connection_state(MqttConnectionState::Connecting)?;
-        self.set_connection_state(MqttConnectionState::Connected)?;
-        Ok(())
     }
 }
 
@@ -190,24 +156,16 @@ mod tests {
     async fn test_mock_client_creation() {
         let client = MockClient::new("test-client");
         assert_eq!(client.get_client_id(), "test-client");
+        let state = *client.get_state().borrow();
+        assert_eq!(state, MqttConnectionState::Connected);
         
         let client_default = MockClient::new_default();
         assert_eq!(client_default.get_client_id(), "mock-client");
     }
 
     #[tokio::test]
-    async fn test_mock_client_connect() {
-        let mut client = MockClient::new("test");
-        let result = client.connect("mqtt://localhost:1883".to_string()).await;
-        assert!(result.is_ok());
-        
-        let state = *client.get_state().borrow();
-        assert_eq!(state, MqttConnectionState::Connected);
-    }
-
-    #[tokio::test]
     async fn test_mock_client_publish() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         
         let msg = MqttMessage::simple(
             "test/topic".to_string(),
@@ -229,7 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_client_publish_qos_variants() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         
         // QoS 0
         let msg0 = MqttMessage::simple(
@@ -264,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_client_publish_nowait() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         
         let msg = MqttMessage::simple(
             "test/topic".to_string(),
@@ -273,7 +231,7 @@ mod tests {
             Bytes::from("test"),
         );
         
-    let result = client.publish_nowait(msg);
+        let result = client.publish_nowait(msg);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), MqttPublishSuccess::Queued);
         
@@ -282,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_client_multiple_publishes() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         
         for i in 0..5 {
             let msg = MqttMessage::simple(
@@ -307,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_client_subscribe_and_simulate_receive() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         let (tx, mut rx) = broadcast::channel(10);
         
         let sub_id = client.subscribe("test/topic".to_string(), QoS::AtLeastOnce, tx).await;
@@ -326,17 +284,18 @@ mod tests {
         assert!(sent_count.is_ok());
         assert_eq!(sent_count.unwrap(), 1);
         
-        // Verify the message was received
+        // Verify the message was received with subscription ID
         let received = rx.recv().await;
         assert!(received.is_ok());
         let received_msg = received.unwrap();
         assert_eq!(received_msg.topic, "test/topic");
         assert_eq!(received_msg.payload, Bytes::from("incoming message"));
+        assert_eq!(received_msg.subscription_id, Some(1));
     }
 
     #[tokio::test]
     async fn test_mock_client_unsubscribe() {
-        let mut client = MockClient::new("test");
+        let mut client = MockClient::new_default();
         let (tx, _rx) = broadcast::channel(10);
         
         client.subscribe("test/topic".to_string(), QoS::AtLeastOnce, tx).await.unwrap();
@@ -359,44 +318,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mock_client_disconnect() {
-        let mut client = MockClient::new("test");
-        client.connect("mqtt://localhost:1883".to_string()).await.unwrap();
+    async fn test_mock_client_multiple_subscriptions() {
+        let mut client = MockClient::new_default();
+        let (tx1, mut rx1) = broadcast::channel(10);
+        let (tx2, mut rx2) = broadcast::channel(10);
         
-        let result = client.disconnect().await;
-        assert!(result.is_ok());
+        let sub_id1 = client.subscribe("topic1".to_string(), QoS::AtLeastOnce, tx1).await.unwrap();
+        let sub_id2 = client.subscribe("topic2".to_string(), QoS::AtLeastOnce, tx2).await.unwrap();
         
-        let state = *client.get_state().borrow();
-        assert_eq!(state, MqttConnectionState::Disconnected);
-    }
-
-    #[tokio::test]
-    async fn test_mock_client_reconnect() {
-        let mut client = MockClient::new("test");
-        client.connect("mqtt://localhost:1883".to_string()).await.unwrap();
+        assert_eq!(sub_id1, 1);
+        assert_eq!(sub_id2, 2);
         
-        let result = client.reconnect(true).await;
-        assert!(result.is_ok());
+        // Simulate messages on both topics
+        let msg1 = MqttMessage::simple("topic1".to_string(), QoS::AtMostOnce, false, Bytes::from("msg1"));
+        let msg2 = MqttMessage::simple("topic2".to_string(), QoS::AtMostOnce, false, Bytes::from("msg2"));
         
-        let state = *client.get_state().borrow();
-        assert_eq!(state, MqttConnectionState::Connected);
-    }
-
-    #[tokio::test]
-    async fn test_mock_client_set_last_will() {
-        let mut client = MockClient::new("test");
+        client.simulate_receive(msg1).unwrap();
+        client.simulate_receive(msg2).unwrap();
         
-        let lwt = MqttMessage::simple(
-            "status/test".to_string(),
-            QoS::AtLeastOnce,
-            true,
-            Bytes::from("offline"),
-        );
+        let received1 = rx1.recv().await.unwrap();
+        let received2 = rx2.recv().await.unwrap();
         
-        client.set_last_will(lwt.clone());
-        assert!(client.last_will.is_some());
-        
-        let stored_lwt = client.last_will.as_ref().unwrap();
-        assert_eq!(stored_lwt.topic, "status/test");
+        assert_eq!(received1.subscription_id, Some(1));
+        assert_eq!(received2.subscription_id, Some(2));
     }
 }

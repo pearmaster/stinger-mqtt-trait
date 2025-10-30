@@ -1,8 +1,9 @@
-//! Validation test suite for MqttClient implementations
+//! Validation test suite for Mqtt5PubSub implementations
 //!
 //! This module provides a comprehensive set of test functions that can be used to validate
-//! any implementation of the `MqttClient` trait. Tests can be run against a mock broker or
-//! a real MQTT broker instance (e.g., rumqttd).
+//! any implementation of the `Mqtt5PubSub` trait. These tests focus on pub/sub operations
+//! (publish, subscribe, unsubscribe) and assume the underlying MQTT client is already
+//! connected and managed by the application.
 //!
 //! # Usage
 //!
@@ -10,24 +11,26 @@
 //! use stinger_mqtt_trait::validation::*;
 //!
 //! #[tokio::test]
-//! async fn validate_my_client() {
-//!     let mut client = MyMqttClient::new();
-//!     test_connection_lifecycle(&mut client, "mqtt://localhost:1883").await;
-//!     test_publish_qos_levels(&mut client).await;
+//! async fn validate_my_pubsub() {
+//!     let mut client = MyMqtt5PubSubClient::new();
+//!     // Application manages connection
+//!     test_publish_qos0(&mut client).await;
+//!     test_subscribe_receive_unsubscribe(&mut client).await;
 //! }
 //! ```
 //!
 //! ## Using with rumqttd
 //!
 //! ```ignore
-//! use stinger_mqtt_trait::validation::{broker::TestBroker, run_full_validation_suite};
+//! use stinger_mqtt_trait::validation::{broker::TestBroker, run_full_pubsub_validation_suite};
 //!
 //! #[tokio::test]
 //! async fn test_with_real_broker() {
 //!     let broker = TestBroker::start_default().await.unwrap();
-//!     let mut client = MyMqttClient::new();
+//!     let mut client = MyMqtt5PubSubClient::new();
+//!     // Connect your client here (application responsibility)
 //!     
-//!     run_full_validation_suite(&mut client, &broker.mqtt_uri()).await.unwrap();
+//!     run_full_pubsub_validation_suite(&mut client).await.unwrap();
 //!     
 //!     broker.stop().unwrap();
 //! }
@@ -49,78 +52,19 @@ use crate::*;
 use bytes::Bytes;
 use tokio::time::{timeout, Duration};
 
-/// Test basic connection lifecycle: connect -> verify state -> disconnect
-pub async fn test_connection_lifecycle<C: MqttClient>(
-    client: &mut C,
-    uri: &str,
-) -> Result<(), String> {
-    // Test connect
-    client
-        .connect(uri.to_string())
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+/// Test client ID retrieval
+pub async fn test_get_client_id<C: Mqtt5PubSub>(client: &C) -> Result<String, String> {
+    let client_id = client.get_client_id();
 
-    // Verify state is Connected
-    let state_rx = client.get_state();
-    let current_state = *state_rx.borrow();
-    if current_state != MqttConnectionState::Connected {
-        return Err(format!(
-            "Expected Connected state, got {:?}",
-            current_state
-        ));
+    if client_id.is_empty() {
+        return Err("Client ID is empty".to_string());
     }
 
-    // Test disconnect
-    client
-        .disconnect()
-        .await
-        .map_err(|e| format!("Failed to disconnect: {}", e))?;
-
-    Ok(())
-}
-
-/// Test state transitions during connection lifecycle
-pub async fn test_state_transitions<C: MqttClient>(
-    client: &mut C,
-    uri: &str,
-) -> Result<(), String> {
-    let state_rx = client.get_state();
-
-    // Initial state should be Disconnected
-    let initial_state = *state_rx.borrow();
-    if initial_state != MqttConnectionState::Disconnected {
-        return Err(format!(
-            "Expected initial Disconnected state, got {:?}",
-            initial_state
-        ));
-    }
-
-    // Connect and wait for state change
-    client
-        .connect(uri.to_string())
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
-
-    // State should now be Connected
-    let connected_state = *state_rx.borrow();
-    if connected_state != MqttConnectionState::Connected {
-        return Err(format!(
-            "Expected Connected state after connect, got {:?}",
-            connected_state
-        ));
-    }
-
-    // Disconnect
-    client
-        .disconnect()
-        .await
-        .map_err(|e| format!("Failed to disconnect: {}", e))?;
-
-    Ok(())
+    Ok(client_id)
 }
 
 /// Test publishing with QoS 0 (fire and forget)
-pub async fn test_publish_qos0<C: MqttClient>(client: &mut C) -> Result<(), String> {
+pub async fn test_publish_qos0<C: Mqtt5PubSub>(client: &mut C) -> Result<(), String> {
     let message = MqttMessage::simple(
         "test/qos0".to_string(),
         message::QoS::AtMostOnce,
@@ -137,7 +81,7 @@ pub async fn test_publish_qos0<C: MqttClient>(client: &mut C) -> Result<(), Stri
 }
 
 /// Test publishing with QoS 1 (at least once)
-pub async fn test_publish_qos1<C: MqttClient>(client: &mut C) -> Result<(), String> {
+pub async fn test_publish_qos1<C: Mqtt5PubSub>(client: &mut C) -> Result<(), String> {
     let message = MqttMessage::simple(
         "test/qos1".to_string(),
         message::QoS::AtLeastOnce,
@@ -154,7 +98,7 @@ pub async fn test_publish_qos1<C: MqttClient>(client: &mut C) -> Result<(), Stri
 }
 
 /// Test publishing with QoS 2 (exactly once)
-pub async fn test_publish_qos2<C: MqttClient>(client: &mut C) -> Result<(), String> {
+pub async fn test_publish_qos2<C: Mqtt5PubSub>(client: &mut C) -> Result<(), String> {
     let message = MqttMessage::simple(
         "test/qos2".to_string(),
         message::QoS::ExactlyOnce,
@@ -171,7 +115,7 @@ pub async fn test_publish_qos2<C: MqttClient>(client: &mut C) -> Result<(), Stri
 }
 
 /// Test all QoS levels in sequence
-pub async fn test_publish_all_qos_levels<C: MqttClient>(client: &mut C) -> Result<(), String> {
+pub async fn test_publish_all_qos_levels<C: Mqtt5PubSub>(client: &mut C) -> Result<(), String> {
     test_publish_qos0(client).await?;
     test_publish_qos1(client).await?;
     test_publish_qos2(client).await?;
@@ -179,7 +123,7 @@ pub async fn test_publish_all_qos_levels<C: MqttClient>(client: &mut C) -> Resul
 }
 
 /// Test publish_nowait (fire and forget, no blocking)
-pub async fn test_publish_nowait<C: MqttClient>(client: &mut C) -> Result<(), String> {
+pub async fn test_publish_nowait<C: Mqtt5PubSub>(client: &mut C) -> Result<(), String> {
     let message = MqttMessage::simple(
         "test/nowait".to_string(),
         message::QoS::AtMostOnce,
@@ -195,7 +139,7 @@ pub async fn test_publish_nowait<C: MqttClient>(client: &mut C) -> Result<(), St
 }
 
 /// Test subscribe and verify subscription ID is returned
-pub async fn test_subscribe<C: MqttClient>(client: &mut C) -> Result<u32, String> {
+pub async fn test_subscribe<C: Mqtt5PubSub>(client: &mut C) -> Result<u32, String> {
     let (tx, _rx) = tokio::sync::broadcast::channel(10);
 
     let sub_id = client
@@ -214,7 +158,7 @@ pub async fn test_subscribe<C: MqttClient>(client: &mut C) -> Result<u32, String
 }
 
 /// Test unsubscribe from a topic
-pub async fn test_unsubscribe<C: MqttClient>(client: &mut C, topic: &str) -> Result<(), String> {
+pub async fn test_unsubscribe<C: Mqtt5PubSub>(client: &mut C, topic: &str) -> Result<(), String> {
     client
         .unsubscribe(topic.to_string())
         .await
@@ -224,7 +168,7 @@ pub async fn test_unsubscribe<C: MqttClient>(client: &mut C, topic: &str) -> Res
 }
 
 /// Test full subscribe -> receive message -> unsubscribe cycle
-pub async fn test_subscribe_receive_unsubscribe<C: MqttClient>(
+pub async fn test_subscribe_receive_unsubscribe<C: Mqtt5PubSub>(
     client: &mut C,
 ) -> Result<(), String> {
     let (tx, mut rx) = tokio::sync::broadcast::channel(10);
@@ -280,98 +224,15 @@ pub async fn test_subscribe_receive_unsubscribe<C: MqttClient>(
     Ok(())
 }
 
-/// Test setting Last Will message before connecting
-pub async fn test_last_will_setup<C: MqttClient>(
+/// Run the complete pub/sub validation suite
+pub async fn run_full_pubsub_validation_suite<C: Mqtt5PubSub>(
     client: &mut C,
-    uri: &str,
 ) -> Result<(), String> {
-    // Set Last Will before connecting
-    let lwt = MqttMessage::simple(
-        "test/lwt".to_string(),
-        message::QoS::AtLeastOnce,
-        true,
-        Bytes::from("offline"),
-    );
-
-    client.set_last_will(lwt);
-
-    // Connect
-    client
-        .connect(uri.to_string())
-        .await
-        .map_err(|e| format!("Failed to connect with LWT: {}", e))?;
-
-    Ok(())
-}
-
-/// Test reconnect with clean start
-pub async fn test_reconnect_clean<C: MqttClient>(client: &mut C) -> Result<(), String> {
-    client
-        .reconnect(true)
-        .await
-        .map_err(|e| format!("Failed to reconnect with clean start: {}", e))?;
-
-    // Verify state is Connected
-    let state_rx = client.get_state();
-    let current_state = *state_rx.borrow();
-    if current_state != MqttConnectionState::Connected {
-        return Err(format!(
-            "Expected Connected state after reconnect, got {:?}",
-            current_state
-        ));
-    }
-
-    Ok(())
-}
-
-/// Test reconnect without clean start (resume session)
-pub async fn test_reconnect_resume<C: MqttClient>(client: &mut C) -> Result<(), String> {
-    client
-        .reconnect(false)
-        .await
-        .map_err(|e| format!("Failed to reconnect with session resume: {}", e))?;
-
-    // Verify state is Connected
-    let state_rx = client.get_state();
-    let current_state = *state_rx.borrow();
-    if current_state != MqttConnectionState::Connected {
-        return Err(format!(
-            "Expected Connected state after reconnect, got {:?}",
-            current_state
-        ));
-    }
-
-    Ok(())
-}
-
-/// Test client ID retrieval
-pub async fn test_get_client_id<C: MqttClient>(client: &C) -> Result<String, String> {
-    let client_id = client.get_client_id();
-
-    if client_id.is_empty() {
-        return Err("Client ID is empty".to_string());
-    }
-
-    Ok(client_id)
-}
-
-/// Run the complete validation suite
-pub async fn run_full_validation_suite<C: MqttClient>(
-    client: &mut C,
-    uri: &str,
-) -> Result<(), String> {
-    println!("Running full MqttClient validation suite...");
+    println!("Running full Mqtt5PubSub validation suite...");
 
     println!("  Testing client ID...");
     let client_id = test_get_client_id(client).await?;
     println!("    ✓ Client ID: {}", client_id);
-
-    println!("  Testing connection lifecycle...");
-    test_connection_lifecycle(client, uri).await?;
-    println!("    ✓ Connection lifecycle");
-
-    println!("  Reconnecting for remaining tests...");
-    client.connect(uri.to_string()).await.map_err(|e| e.to_string())?;
 
     println!("  Testing QoS 0 publish...");
     test_publish_qos0(client).await?;
@@ -385,9 +246,9 @@ pub async fn run_full_validation_suite<C: MqttClient>(
     test_publish_qos2(client).await?;
     println!("    ✓ QoS 2 publish");
 
-    println!("  Testing nowait publish...");
+    println!("  Testing publish_nowait...");
     test_publish_nowait(client).await?;
-    println!("    ✓ No-wait publish");
+    println!("    ✓ publish_nowait");
 
     println!("  Testing subscribe...");
     let sub_id = test_subscribe(client).await?;
@@ -401,18 +262,6 @@ pub async fn run_full_validation_suite<C: MqttClient>(
     test_subscribe_receive_unsubscribe(client).await?;
     println!("    ✓ Subscribe-receive-unsubscribe");
 
-    println!("  Testing reconnect with clean start...");
-    test_reconnect_clean(client).await?;
-    println!("    ✓ Reconnect (clean)");
-
-    println!("  Testing reconnect with session resume...");
-    test_reconnect_resume(client).await?;
-    println!("    ✓ Reconnect (resume)");
-
-    println!("  Disconnecting...");
-    client.disconnect().await.map_err(|e| e.to_string())?;
-    println!("    ✓ Disconnect");
-
-    println!("\n✓ All validation tests passed!");
+    println!("\n✓ All pub/sub validation tests passed!");
     Ok(())
 }
