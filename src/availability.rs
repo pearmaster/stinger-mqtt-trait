@@ -63,6 +63,32 @@ impl Default for OnlineData {
     }
 }
 
+impl OnlineData {
+    /// Serialize the OnlineData to JSON and return as bytes
+    /// 
+    /// # Returns
+    /// 
+    /// Returns `Ok(Vec<u8>)` containing the JSON bytes, or an error if serialization fails.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// use stinger_mqtt_trait::availability::OnlineData;
+    /// 
+    /// let data = OnlineData {
+    ///     online: true,
+    ///     system_id: Some("my-system".to_string()),
+    ///     ..Default::default()
+    /// };
+    /// 
+    /// let json_bytes = data.as_json_bytes().unwrap();
+    /// assert!(!json_bytes.is_empty());
+    /// ```
+    pub fn as_json_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
+        serde_json::to_vec(self)
+    }
+}
+
 /// Message builder for online/offline status messages
 #[derive(Debug, Clone)]
 pub struct AvailabilityHelper {
@@ -272,5 +298,41 @@ mod tests {
         assert_eq!(data.system_id, None);
         assert_eq!(data.client_id, None);
         assert_eq!(data.service_id, None);
+    }
+
+    #[test]
+    fn test_as_json_bytes() {
+        let data = OnlineDataBuilder::default()
+            .system_id("test-system")
+            .client_id("test-client")
+            .online(true)
+            .name("Test Name")
+            .build()
+            .unwrap();
+        
+        let json_bytes = data.as_json_bytes().unwrap();
+        
+        // Verify we got bytes back
+        assert!(!json_bytes.is_empty());
+        
+        // Verify it's valid JSON by deserializing it back
+        let deserialized: OnlineData = serde_json::from_slice(&json_bytes).unwrap();
+        assert_eq!(deserialized.system_id, Some("test-system".to_string()));
+        assert_eq!(deserialized.client_id, Some("test-client".to_string()));
+        assert_eq!(deserialized.online, true);
+        assert_eq!(deserialized.name, Some("Test Name".to_string()));
+    }
+
+    #[test]
+    fn test_as_json_bytes_minimal() {
+        let data = OnlineData::default();
+        let json_bytes = data.as_json_bytes().unwrap();
+        
+        // Even a minimal struct should serialize
+        assert!(!json_bytes.is_empty());
+        
+        // Verify it can be deserialized back
+        let deserialized: OnlineData = serde_json::from_slice(&json_bytes).unwrap();
+        assert_eq!(deserialized.online, false);
     }
 }

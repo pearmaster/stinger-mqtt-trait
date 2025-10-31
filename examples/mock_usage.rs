@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(last_msg.topic, "system/sensor-client");
         
         // Deserialize to check the data
-        use stinger_mqtt_trait::available::OnlineData;
+        use stinger_mqtt_trait::availability::OnlineData;
         let data: OnlineData = serde_json::from_slice(&last_msg.payload).unwrap();
         assert_eq!(data.online, true);
         assert_eq!(data.system_id, Some("sensor-client".to_string()));
