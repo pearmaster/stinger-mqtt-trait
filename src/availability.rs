@@ -134,7 +134,7 @@ impl AvailabilityHelper {
     }
 
     /// Build an MQTT message with the specified online status
-    pub fn get_message(&mut self, online: bool) -> Result<MqttMessage, Box<dyn std::error::Error>> {
+    pub fn get_message(&mut self, online: bool) -> Result<MqttMessage, Box<dyn std::error::Error + Send + Sync>> {
         // Lock the mutex and update the data
         let mut data = self.data.lock().unwrap();
         
